@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pattern Recognition Game - Set Challenge (Quiz Mode)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap');
+
+  body {
+    margin: 0;
+    font-family: 'Poppins', sans-serif;
+    background: linear-gradient(135deg, #83a4d4, #b6fbff);
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    color: #333;
+  }
+  header {
+    padding: 1rem 1.5rem;
+    text-align: center;
+    background: #022f40;
+    color: #e0f7fa;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+  }
+  header h1 {
+    margin: 0;
+    font-weight: 700;
+    font-size: 1.8rem;
+    letter-spacing: 1.2px;
+  }
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    max-width: 900px;
+    margin: 1rem auto 2rem;
+    width: 95%;
+  }
+  #instructions {
+    background: #227093;
+    color: #dff9fb;
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
+    box-shadow: 0 6px 24px rgba(34,112,147,.4);
+    font-size: 1rem;
+    line-height: 1.4;
+  }
+  #game-container {
+    margin-top: 1.5rem;
+    background: #f0f8ff;
+    border-radius: 16px;
+    box-shadow: 0 12px 28px rgba(0, 111, 185, 0.3);
+    padding: 1.5rem;
+  }
+  #cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit,minmax(120px,1fr));
+    grid-gap: 16px;
+    margin-bottom: 1.5rem;
+  }
+  .card {
+    background: white;
+    border-radius: 12px;
+    border: 3px solid transparent;
+    cursor: pointer;
+    padding: 12px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    user-select: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 130px;
+  }
+  .card.selected {
+    border-color: #22a6b3;
+    box-shadow: 0 0 15px #22a6b3;
+  }
+  .card.disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+  .card.highlight {
+    border-color: #e67e22 !important;
+    box-shadow: 0 0 20px 4px #e67e22 !important;
+  }
+  svg {
+    max-width: 100%;
+    max-height: 90px;
+  }
+  
+  /* Controls */
+  #controls {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  button {
+    background: linear-gradient(45deg, #0072ff, #00c6ff);
+    border: none;
+    padding: 14px 28px;
+    border-radius: 40px;
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: white;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(0,198,255,0.6);
+    transition: background 0.4s ease, box-shadow 0.3s ease;
+    user-select: none;
+    min-width: 110px;
+  }
+  button:hover:not(:disabled) {
+    background: linear-gradient(45deg, #00c6ff, #0072ff);
+    box-shadow: 0 8px 28px rgba(0,198,255,0.85);
+  }
+  button:disabled {
+    background: #a0a0a0;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+  
+  #message {
+    text-align: center;
+    font-weight: 700;
+    font-size: 1.25rem;
+    min-height: 48px;
+    color: #006266;
+    margin-top: 0.5rem;
+    min-height: 2rem;
+  }
+  @media (max-width: 480px) {
+    #cards-grid {
+      grid-template-columns: repeat(auto-fit,minmax(100px,1fr));
+      grid-gap: 12px;
+    }
+    .card {
+      height: 110px;
+      padding: 8px;
+    }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pattern Recognition Game: Set Challenge!</h1>
+</header>
+<main>
+  <section id="instructions" aria-label="How to play instructions">
+    <strong>Instructions:</strong> Select 3 cards that form a valid set. For each attribute (shape, color, number, shading), the cards must be all the same or all different. You have 4 attempts per question. After 4 failed tries, the correct set will be revealed. Use the <em>Hint</em> button to highlight a card in a valid set. After a question ends, use Next or Exit buttons to continue or quit.
+  </section>
+
+  <section id="game-container" aria-live="polite" aria-atomic="true">
+    <div id="cards-grid" role="grid" aria-label="Set cards grid"></div>
+    <div id="controls">
+      <button id="hint-btn" aria-label="Get a hint to find a valid set">Hint</button>
+      <button id="submit-btn" aria-label="Submit selected cards" disabled>Submit</button>
+    </div>
+    <div id="message" aria-live="polite" aria-atomic="true"></div>
+    <div id="post-question-controls" style="display:none; margin-top:1rem; text-align:center;">
+      <button id="next-question-btn" aria-label="Next question">Next</button>
+      <button id="exit-btn" aria-label="Exit game">Exit</button>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  // Attributes definitions
+  const shapes = ['oval', 'diamond', 'squiggle'];
+  const colors = ['#e74c3c', '#27ae60', '#8e44ad']; // red, green, purple colors
+  const numbers = [1, 2, 3];
+  const shadings = ['solid', 'striped', 'open'];
+
+  // Predefined question sets:
+  // Each question contains an array of cards (between 12-15);
+  // and at least one valid set embedded (predefined valid set indices).
+  // Cards attribute values: shape, color, number, shading (0..2)
+  // Number attribute is 0-based (0=1 shape, 1=2 shapes, 2=3 shapes)
+  const questions = [
+    {
+      cards: [
+        {shape: 0, color: 0, number: 0, shading: 0}, // oval, red, 1, solid
+        {shape: 1, color: 1, number: 1, shading: 1}, // diamond, green, 2, striped
+        {shape: 2, color: 2, number: 2, shading: 2}, // squiggle, purple, 3, open
+        {shape: 0, color: 1, number: 2, shading: 0},
+        {shape: 1, color: 2, number: 0, shading: 1},
+        {shape: 2, color: 0, number: 1, shading: 2},
+        {shape: 0, color: 2, number: 1, shading: 0},
+        {shape: 1, color: 0, number: 2, shading: 1},
+        {shape: 2, color: 1, number: 0, shading: 2},
+        {shape: 0, color: 0, number: 2, shading: 1},
+        {shape: 1, color: 1, number: 0, shading: 2},
+        {shape: 2, color: 2, number: 1, shading: 0}
+      ],
+      validSetIndices: [0,1,2]
+    },
+    {
+      cards: [
+        {shape:1,color:0,number:2,shading:0},
+        {shape:2,color:1,number:2,shading:0},
+        {shape:0,color:2,number:2,shading:0},
+        {shape:2,color:0,number:0,shading:1},
+        {shape:0,color:0,number:0,shading:2},
+        {shape:1,color:0,number:0,shading:1},
+        {shape:0,color:1,number:1,shading:0},
+        {shape:1,color:1,number:1,shading:2},
+        {shape:2,color:2,number:1,shading:2},
+        {shape:0,color:1,number:0,shading:2},
+        {shape:2,color:2,number:0,shading:1},
+        {shape:1,color:1,number:2,shading:2}
+      ],
+      validSetIndices: [0,1,2]
+    },
+    {
+      cards: [
+        {shape:0,color:0,number:1,shading:0},
+        {shape:0,color:1,number:1,shading:1},
+        {shape:0,color:2,number:1,shading:2},
+        {shape:1,color:0,number:0,shading:0},
+        {shape:2,color:1,number:1,shading:0},
+        {shape:1,color:2,number:2,shading:2},
+        {shape:2,color:0,number:2,shading:1},
+        {shape:2,color:2,number:0,shading:0},
+        {shape:1,color:1,number:2,shading:0},
+        {shape:1,color:1,number:0,shading:1},
+        {shape:0,color:2,number:0,shading:1},
+        {shape:2,color:2,number:2,shading:2}
+      ],
+      validSetIndices: [0,1,2]
+    },
+    {
+      cards: [
+        {shape:2, color:0, number:0, shading:1},
+        {shape:2, color:1, number:1, shading:1},
+        {shape:2, color:2, number:2, shading:1},
+        {shape:0, color:2, number:1, shading:0},
+        {shape:1, color:1, number:0, shading:2},
+        {shape:0, color:0, number:2, shading:1},
+        {shape:1, color:1, number:1, shading:0},
+        {shape:0, color:2, number:0, shading:2},
+        {shape:1, color:0, number:2, shading:0},
+        {shape:2, color:1, number:0, shading:2},
+        {shape:0, color:1, number:0, shading:0},
+        {shape:1, color:2, number:1, shading:1}
+      ],
+      validSetIndices: [0,1,2]
+    },
+    {
+      cards: [
+        {shape:1,color:0,number:2,shading:2},
+        {shape:0,color:1,number:2,shading:2},
+        {shape:2,color:2,number:2,shading:2},
+        {shape:1,color:1,number:0,shading:1},
+        {shape:0,color:0,number:1,shading:0},
+        {shape:2,color:0,number:0,shading:1},
+        {shape:1,color:2,number:1,shading:1},
+        {shape:2,color:1,number:1,shading:0},
+        {shape:0,color:2,number:0,shading:1},
+        {shape:1,color:0,number:1,shading:2},
+        {shape:2,color:1,number:2,shading:0},
+        {shape:0,color:1,number:0,shading:2}
+      ],
+      validSetIndices: [0,1,2]
+    },
+    {
+      cards: [
+        {shape:2,color:2,number:1,shading:0},
+        {shape:1,color:1,number:1,shading:0},
+        {shape:0,color:0,number:1,shading:0},
+        {shape:2,color:0,number:0,shading:2},
+        {shape:1,color:2,number:0,shading:2},
+        {shape:0,color:1,number:0,shading:2},
+        {shape:2,color:1,number:2,shading:1},
+        {shape:1,color:0,number:2,shading:1},
+        {shape:0,color:2,number:2,shading:1},
+        {shape:2,color:0,number:1,shading:1},
+        {shape:1,color:1,number:0,shading:0},
+        {shape:0,color:2,number:2,shading:0}
+      ],
+      validSetIndices: [0,1,2]
+    },
+    {
+      cards: [
+        {shape:0,color:2,number:0,shading:0},
+        {shape:1,color:1,number:1,shading:1},
+        {shape:2,color:0,number:2,shading:2},
+        {shape:0,color:0,number:1,shading:1},
+        {shape:1,color:2,number:0,shading:2},
+        {shape:2,color:1,number:2,shading:0},
+        {shape:0,color:1,number:2,shading:1},
+        {shape:1,color:0,number:1,shading:2},
+        {shape:2,color:2,number:0,shading:1},
+        {shape:0,color:2,number:2,shading:0},
+        {shape:1,color:1,number:0,shading:1},
+        {shape:2,color:0,number:1,shading:2}
+      ],
+      validSetIndices: [0,1,2]
+    },
+    {
+      cards: [
+        {shape:2,color:1,number:0,shading:1},
+        {shape:1,color:1,number:1,shading:2},
+        {shape:0,color:1,number:2,shading:0},
+        {shape:2,color:0,number:0,shading:2},
+        {shape:1,color:0,number:1,shading:1},
+        {shape:0,color:0,number:2,shading:2},
+        {shape:2,color:2,number:0,shading:0},
+        {shape:1,color:2,number:1,shading:0},
+        {shape:0,color:2,number:2,shading:1},
+        {shape:2,color:1,number:1,shading:1},
+        {shape:1,color:0,number:0,shading:2},
+        {shape:0,color:1,number:0,shading:1}
+      ],
+      validSetIndices: [0,1,2]
+    },
+    {
+      cards: [
+        {shape:1,color:2,number:1,shading:0},
+        {shape:0,color:0,number:2,shading:1},
+        {shape:2,color:1,number:0,shading:2},
+        {shape:1,color:1,number:2,shading:0},
+        {shape:0,color:2,number:0,shading:2},
+        {shape:2,color:0,number:1,shading:1},
+        {shape:1,color:0,number:1,shading:0},
+        {shape:0,color:1,number:2,shading:2},
+        {shape:2,color:2,number:0,shading:1},
+        {shape:1,color:0,number:0,shading:1},
+        {shape:0,color:1,number:1,shading:2},
+        {shape:2,color:1,number:2,shading:0}
+      ],
+      validSetIndices: [0,1,2]
+    },
+    {
+      cards: [
+        {shape:0,color:0,number:0,shading:2},
+        {shape:1,color:1,number:1,shading:1},
+        {shape:2,color:2,number:2,shading:0},
+        {shape:0,color:1,number:0,shading:1},
+        {shape:1,color:2,number:1,shading:0},
+        {shape:2,color:0,number:2,shading:1},
+        {shape:0,color:2,number:2,shading:2},
+        {shape:1,color:0,number:0,shading:0},
+        {shape:2,color:1,number:1,shading:2},
+        {shape:0,color:0,number:1,shading:0},
+        {shape:1,color:1,number:2,shading:1},
+        {shape:2,color:2,number:0,shading:2}
+      ],
+      validSetIndices: [0,1,2]
+    }
+  ];
+
+  // State:
+  let currentQuestionIndex = 0;
+  let attemptsLeft = 4;
+  let currentCards = [];
+  let selectedIndices = new Set();
+
+  let cardsGrid, messageElem, hintBtn, submitBtn, controlsDiv, postQuestionControls;
+  let nextQuestionBtn, exitBtn;
+
+  // Utility function for creating SVGs
+  function createCardSVG(card) {
+    const xmlns="http://www.w3.org/2000/svg";
+    const boxWidth = 100;
+    const boxHeight = 90;
+    const svg = document.createElementNS(xmlns,"svg");
+    svg.setAttribute("width", boxWidth);
+    svg.setAttribute("height", boxHeight);
+    svg.setAttribute("viewBox","0 0 100 90");
+
+    if(!document.getElementById("stripedPattern")) {
+      const defs = document.createElementNS(xmlns,"defs");
+      const pattern = document.createElementNS(xmlns,"pattern");
+      pattern.setAttribute("id","stripedPattern");
+      pattern.setAttribute("width","6");
+      pattern.setAttribute("height","6");
+      pattern.setAttribute("patternUnits","userSpaceOnUse");
+      pattern.setAttribute("patternTransform","rotate(45)");
+      for(let i=0; i<6; i+=2){
+        const line= document.createElementNS(xmlns,"rect");
+        line.setAttribute("x",i);
+        line.setAttribute("y", "0");
+        line.setAttribute("width", "1");
+        line.setAttribute("height", "6");
+        line.setAttribute("fill", "white");
+        pattern.appendChild(line);
+      }
+      defs.appendChild(pattern);
+      svg.appendChild(defs);
+    }
+
+    const shapeCount = card.number + 1;
+    const spacing = boxWidth / (shapeCount + 1);
+
+    for(let i=1; i<=shapeCount; i++) {
+      let shape;
+      const xPos = spacing*i;
+      switch(card.shape){
+        case 0: // oval
+          shape = document.createElementNS(xmlns,"ellipse");
+          shape.setAttribute("cx", xPos);
+          shape.setAttribute("cy", 45);
+          shape.setAttribute("rx", 12);
+          shape.setAttribute("ry", 25);
+          break;
+        case 1: // diamond
+          shape = document.createElementNS(xmlns,"polygon");
+          const diamondPoints = [
+            [xPos, 20],
+            [xPos + 15, 45],
+            [xPos, 70],
+            [xPos - 15, 45]
+          ].map(p => p.join(",")).join(" ");
+          shape.setAttribute("points", diamondPoints);
+          break;
+        case 2: // squiggle
+          shape = document.createElementNS(xmlns,"path");
+          const pathD = `
+            M${xPos-15} 60
+            C${xPos-5} 80, ${xPos+25} 40, ${xPos+25} 60
+            S${xPos+15} 80, ${xPos-15} 80
+            Z
+          `;
+          shape.setAttribute("d", pathD.trim());
+          break;
+      }
+      const fillColor = colors[card.color];
+      switch(card.shading){
+        case 0: // solid
+          shape.setAttribute("fill", fillColor);
+          shape.setAttribute("stroke", fillColor);
+          shape.setAttribute("stroke-width", "1.7");
+          break;
+        case 1: // striped
+          shape.setAttribute("fill", "url(#stripedPattern)");
+          shape.setAttribute("stroke", fillColor);
+          shape.setAttribute("stroke-width", "1.7");
+          break;
+        case 2: // open
+          shape.setAttribute("fill", "none");
+          shape.setAttribute("stroke", fillColor);
+          shape.setAttribute("stroke-width", "3");
+          break;
+      }
+      svg.appendChild(shape);
+    }
+
+    return svg;
+  }
+
+  // Render cards
+  function renderCards(cards) {
+    cardsGrid.innerHTML = "";
+    cards.forEach((card, index) => {
+      const cardDiv = document.createElement("div");
+      cardDiv.className = "card";
+      cardDiv.setAttribute("role", "button");
+      cardDiv.setAttribute("tabindex", "0");
+      cardDiv.setAttribute("aria-pressed", "false");
+      const desc = `${numbers[card.number]} ${shadings[card.shading]} ${shapes[card.shape]} ${
+        card.color===0?'red':card.color===1?'green':'purple'
+      } shape${numbers[card.number]>1?'s':''}`;
+      cardDiv.setAttribute("aria-label", desc);
+      cardDiv.dataset.index = index;
+
+      const svg = createCardSVG(card);
+      cardDiv.appendChild(svg);
+
+      cardDiv.addEventListener("click", () => toggleSelection(index, cardDiv));
+      cardDiv.addEventListener("keydown", (e) => {
+        if(e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          toggleSelection(index, cardDiv);
+        }
+      });
+
+      cardsGrid.appendChild(cardDiv);
+    });
+    selectedIndices.clear();
+    submitBtn.disabled = true;
+    messageElem.textContent = "";
+    enableCards();
+  }
+
+  // Toggle selection
+  function toggleSelection(index, cardDiv) {
+    if(cardDiv.classList.contains("disabled")) return;
+    if(selectedIndices.has(index)){
+      selectedIndices.delete(index);
+      cardDiv.classList.remove("selected");
+      cardDiv.setAttribute("aria-pressed", "false");
+    } else {
+      if(selectedIndices.size < 3){
+        selectedIndices.add(index);
+        cardDiv.classList.add("selected");
+        cardDiv.setAttribute("aria-pressed", "true");
+      }
+    }
+    submitBtn.disabled = selectedIndices.size !== 3;
+    messageElem.textContent = "";
+  }
+
+  // Check all attributes same or all different
+  function isValidSet(cards) {
+    for(let attr of ['shape', 'color', 'number', 'shading']){
+      const vals = cards.map(c => c[attr]);
+      const uniqueVals = new Set(vals);
+      if(uniqueVals.size !== 1 && uniqueVals.size !== 3) return false;
+    }
+    return true;
+  }
+
+  // Show hint: highlight one card in the valid set
+  function showHint() {
+    highlightSetIndices(questions[currentQuestionIndex].validSetIndices, 1);
+    messageElem.style.color = '#222';
+    messageElem.textContent = "Hint: Highlighting one card from a valid set.";
+  }
+
+  // Highlight cards given indices; count = number of cards to highlight, 0 = all
+  function highlightSetIndices(indices, count=0) {
+    clearAllHighlights();
+    const cardDivs = cardsGrid.querySelectorAll(".card");
+    let highlightCount = 0;
+    for(let idx of indices){
+      if(count > 0 && highlightCount >= count) break;
+      if(cardDivs[idx]){
+        cardDivs[idx].classList.add("selected");
+        cardDivs[idx].setAttribute("aria-pressed", "true");
+        highlightCount++;
+      }
+    }
+  }
+  // Remove all highlights
+  function clearAllHighlights() {
+    const cardDivs = cardsGrid.querySelectorAll(".card");
+    cardDivs.forEach(div => {
+      div.classList.remove("selected", "highlight");
+      div.setAttribute("aria-pressed", "false");
+    });
+  }
+
+  // Disable cards selection (after end)
+  function disableCards() {
+    const cardDivs = cardsGrid.querySelectorAll(".card");
+    cardDivs.forEach(div => {
+      div.classList.add("disabled");
+    });
+  }
+  // Enable cards selection
+  function enableCards() {
+    const cardDivs = cardsGrid.querySelectorAll(".card");
+    cardDivs.forEach(div => {
+      div.classList.remove("disabled");
+    });
+  }
+
+  // Submit selection
+  function submitSelection() {
+    if(selectedIndices.size !== 3){
+      messageElem.style.color = '#c0392b';
+      messageElem.textContent = "Select exactly 3 cards to submit.";
+      return;
+    }
+    const selectedCards = Array.from(selectedIndices).map(i => currentCards[i]);
+    if(isValidSet(selectedCards)){
+      messageElem.style.color = '#27ae60';
+      messageElem.textContent = "Correct! You found a valid set!";
+      // Show the correct set cards highlighted
+      clearAllHighlights();
+      highlightSetIndices(questions[currentQuestionIndex].validSetIndices);
+      endQuestion(false);
+    } else {
+      attemptsLeft--;
+      if(attemptsLeft > 0){
+        messageElem.style.color = '#c0392b';
+        messageElem.textContent = `Invalid set. You have ${attemptsLeft} attempt${attemptsLeft >1 ? 's':''} left.`;
+      } else {
+        messageElem.style.color = '#c0392b';
+        messageElem.textContent = "You've failed this question.";
+        revealAnswer();
+        endQuestion(true);
+      }
+    }
+  }
+
+  // Reveal answer by highlighting valid set cards
+  function revealAnswer() {
+    disableCards();
+    clearAllHighlights();
+    highlightSetIndices(questions[currentQuestionIndex].validSetIndices);
+  }
+
+  // End question - show Next and Exit buttons, hide Hint/Submit
+  function endQuestion(failed){
+    controlsDiv.style.display = "none";
+    postQuestionControls.style.display = "flex";
+    if(failed){
+      messageElem.textContent += " The correct set is highlighted in orange.";
+    }
+  }
+
+  // Start next question
+  function nextQuestion(){
+    currentQuestionIndex++;
+    if(currentQuestionIndex >= questions.length){
+      messageElem.style.color = '#00796b';
+      messageElem.textContent = "You've completed all questions! Thanks for playing.";
+      clearBoard();
+      controlsDiv.style.display = "none";
+      postQuestionControls.style.display = "none";
+      return;
+    }
+    loadQuestion(currentQuestionIndex);
+  }
+
+  // Exit game: clear board and show goodbye message
+  function exitGame() {
+    messageElem.style.color = '#34495e';
+    messageElem.textContent = "Thanks for playing! See you next time.";
+    clearBoard();
+    controlsDiv.style.display = "none";
+    postQuestionControls.style.display = "none";
+  }
+
+  // Clear board (remove all cards)
+  function clearBoard() {
+    cardsGrid.innerHTML = "";
+  }
+
+  // Load question by index
+  function loadQuestion(index) {
+    selectedIndices.clear();
+    attemptsLeft = 4;
+    currentCards = questions[index].cards;
+    renderCards(currentCards);
+    controlsDiv.style.display = "flex";
+    postQuestionControls.style.display = "none";
+    messageElem.style.color = '#222';
+    messageElem.textContent = `Question ${index+1} - Find a valid set! You have ${attemptsLeft} attempts.`;
+  }
+
+  // Initialization
+  function init() {
+    cardsGrid = document.getElementById("cards-grid");
+    messageElem = document.getElementById("message");
+    hintBtn = document.getElementById("hint-btn");
+    submitBtn = document.getElementById("submit-btn");
+    controlsDiv = document.getElementById("controls");
+    postQuestionControls = document.getElementById("post-question-controls");
+    nextQuestionBtn = document.getElementById("next-question-btn");
+    exitBtn = document.getElementById("exit-btn");
+
+    hintBtn.addEventListener("click", () => {
+      showHint();
+    });
+    submitBtn.addEventListener("click", () => {
+      submitSelection();
+    });
+    nextQuestionBtn.addEventListener("click", () => {
+      nextQuestion();
+    });
+    exitBtn.addEventListener("click", () => {
+      exitGame();
+    });
+
+    currentQuestionIndex = 0;
+    loadQuestion(currentQuestionIndex);
+  }
+
+  window.onload = init;
+})();
+</script>
+</body>
+</html>
+
